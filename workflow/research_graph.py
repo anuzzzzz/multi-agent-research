@@ -6,7 +6,9 @@ This is the brain that manages how agents work together
 
 from typing import Dict, TypedDict, Annotated, List, Any
 from langgraph.graph import StateGraph, END
+from typing import List
 from langgraph.graph.message import add_messages
+
 from datetime import datetime
 import json
 
