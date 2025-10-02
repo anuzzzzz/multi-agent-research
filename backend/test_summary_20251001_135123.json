@@ -1,0 +1,38 @@
+[
+  {
+    "query": "What are the key features of LangGraph?",
+    "complexity": "simple",
+    "success": true,
+    "duration": 42.922735,
+    "expected_time": 30,
+    "within_time": false,
+    "sources_found": 5,
+    "word_count": 796,
+    "total_tokens": 4376,
+    "report_preview": "# Research Report: Key Features of LangGraph\n\n## Executive Summary\nLangGraph has emerged as a noteworthy tool in the realm of advanced AI development, particularly suited for creating complex workflow..."
+  },
+  {
+    "query": "Compare LangGraph with other agent orchestration frameworks like AutoGen and CrewAI",
+    "complexity": "medium",
+    "success": true,
+    "duration": 39.908256,
+    "expected_time": 45,
+    "within_time": true,
+    "sources_found": 5,
+    "word_count": 804,
+    "total_tokens": 4281,
+    "report_preview": "# Research Report: Comparative Analysis of LangGraph, AutoGen, and CrewAI in Agent Orchestration Frameworks\n\n## Executive Summary\nThis report provides a comprehensive comparison of three prominent age..."
+  },
+  {
+    "query": "What are the best practices for building production-ready multi-agent systems with LangGraph in 2024?",
+    "complexity": "complex",
+    "success": true,
+    "duration": 41.579729,
+    "expected_time": 60,
+    "within_time": true,
+    "sources_found": 5,
+    "word_count": 727,
+    "total_tokens": 4273,
+    "report_preview": "# Research Report: Best Practices for Building Production-Ready Multi-Agent Systems with LangGraph in 2024\n\n## Executive Summary\nIn 2024, building production-ready multi-agent systems using LangGraph ..."
+  }
+]
