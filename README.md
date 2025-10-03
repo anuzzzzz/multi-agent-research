@@ -3,6 +3,11 @@
 
 An AI-powered research system that automates complex research workflows using specialized agents working together. Built with LangGraph, FastAPI, and Vue.js.
 
+
+## 📸 Screenshot
+
+![Multi-Agent Research Assistant Screenshot](./docs/images/screenshot.png)
+
 ## 🌟 Features
 
 - **Three Specialized AI Agents**:
