@@ -6,7 +6,7 @@ An AI-powered research system that automates complex research workflows using sp
 
 ## 📸 Screenshot
 
-![Multi-Agent Research Assistant Screenshot](./docs/images/screenshot.png)
+![Multi-Agent Research Assistant Screenshot](https://raw.githubusercontent.com/anuzzzzz/multi-agent-research/main/docs/images/screenshot.png)
 
 ## 🌟 Features
 
