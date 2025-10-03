@@ -14,6 +14,7 @@ import asyncio
 import json
 import hashlib
 import logging
+import concurrent.futures
 
 # Import our workflow and settings
 from workflow.research_graph import ResearchWorkflow
@@ -313,6 +314,101 @@ async def cache_stats():
 # WebSocket Endpoint for Real-time Updates
 # ============================================
 
+async def run_workflow_with_updates(query: str, websocket: WebSocket, manager):
+    """
+    Run the research workflow with real-time progress updates
+    """
+    try:
+        # Send initial research progress
+        await manager.send_json(websocket, {
+            "type": "progress",
+            "step": "research",
+            "message": "🔍 Searching for information...",
+            "progress": 10
+        })
+
+        # Run the workflow in a thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Start the workflow
+            future = loop.run_in_executor(executor, workflow.run, query)
+
+            # Send progress updates while waiting
+            progress_steps = [
+                (5, "research", "🔍 Connecting to search services..."),
+                (10, "research", "🔍 Searching for information..."),
+                (15, "research", "🔍 Gathering sources..."),
+                (20, "research", "🔍 Processing search results..."),
+                (30, "analyze", "🧠 Starting analysis..."),
+                (40, "analyze", "🧠 Analyzing findings..."),
+                (50, "analyze", "🧠 Synthesizing information..."),
+                (60, "analyze", "🧠 Extracting insights..."),
+                (70, "write", "✍️ Starting report generation..."),
+                (80, "write", "✍️ Writing report sections..."),
+                (90, "write", "✍️ Formatting final report..."),
+            ]
+
+            for seconds, step, message in progress_steps:
+                if future.done():
+                    break
+
+                await manager.send_json(websocket, {
+                    "type": "progress",
+                    "step": step,
+                    "message": message,
+                    "progress": (seconds / 45) * 100  # Estimate based on ~45 second total time
+                })
+
+                # Wait a bit before next update
+                await asyncio.sleep(3)
+
+                # Check if done
+                if future.done():
+                    break
+
+            # Get the result (with timeout)
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.wrap_future(future),
+                    timeout=60  # 60 second timeout
+                )
+
+                if result["success"]:
+                    # Cache the result
+                    cache.set(query, result)
+
+                    # Send complete message
+                    await manager.send_json(websocket, {
+                        "type": "complete",
+                        "cached": False,
+                        "report": result["report"],
+                        "metadata": result["metadata"]
+                    })
+                else:
+                    await manager.send_json(websocket, {
+                        "type": "error",
+                        "error": result.get("error", "Research failed")
+                    })
+
+            except asyncio.TimeoutError:
+                await manager.send_json(websocket, {
+                    "type": "error",
+                    "error": "Research timeout - the process took too long"
+                })
+            except Exception as e:
+                await manager.send_json(websocket, {
+                    "type": "error",
+                    "error": str(e)
+                })
+
+    except Exception as e:
+        logger.error(f"Workflow error: {str(e)}")
+        await manager.send_json(websocket, {
+            "type": "error",
+            "error": f"Workflow error: {str(e)}"
+        })
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -329,6 +425,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             if not query:
                 await manager.send_json(websocket, {
+                    "type": "error",
                     "error": "No query provided"
                 })
                 continue
@@ -354,42 +451,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 continue
             
-            # Simulate step-by-step updates (in production, integrate with workflow.run_with_streaming)
-            steps = [
-                {"step": "research", "message": "🔍 Searching for information..."},
-                {"step": "analyze", "message": "🧠 Analyzing findings..."},
-                {"step": "write", "message": "✍️ Writing report..."}
-            ]
-            
-            for i, step_info in enumerate(steps):
-                await asyncio.sleep(2)  # Simulate processing time
-                await manager.send_json(websocket, {
-                    "type": "progress",
-                    "step": step_info["step"],
-                    "message": step_info["message"],
-                    "progress": (i + 1) / len(steps) * 100
-                })
-            
-            # Run actual workflow
-            result = workflow.run(query)
-            
-            if result["success"]:
-                # Cache result
-                cache.set(query, result)
-                
-                # Send complete response
-                await manager.send_json(websocket, {
-                    "type": "complete",
-                    "cached": False,
-                    "report": result["report"],
-                    "metadata": result["metadata"]
-                })
-            else:
-                # Send error
+            try:
+                # Run workflow asynchronously with progress updates
+                await run_workflow_with_updates(query, websocket, manager)
+
+            except Exception as e:
+                logger.error(f"Error during research: {str(e)}")
                 await manager.send_json(websocket, {
                     "type": "error",
-                    "error": result.get("error", "Unknown error"),
-                    "metadata": result.get("metadata", {})
+                    "error": str(e)
                 })
     
     except WebSocketDisconnect:
@@ -397,10 +467,13 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
-        await manager.send_json(websocket, {
-            "type": "error",
-            "error": str(e)
-        })
+        try:
+            await manager.send_json(websocket, {
+                "type": "error",
+                "error": str(e)
+            })
+        except:
+            pass
         manager.disconnect(websocket)
 
 # ============================================

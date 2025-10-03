@@ -29,7 +29,7 @@ class ResearchState(TypedDict):
     The shared state that flows through all agents.
     Think of this as a notebook that each agent reads and writes to.
     """
-    messages: Annotated[List[str], add_messages]  # Conversation history
+    messages: List[str]  # Conversation history
     research_query: str  # What we're researching
     search_results: Dict  # Results from Researcher
     analysis: Dict  # Analysis from Analyzer

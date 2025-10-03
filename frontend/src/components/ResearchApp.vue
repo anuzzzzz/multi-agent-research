@@ -16,11 +16,18 @@
         ></textarea>
         
         <div class="mt-4 flex justify-between">
-          <label class="flex items-center">
-            <input v-model="useCache" type="checkbox" class="mr-2" />
-            <span class="text-sm text-gray-600">Use cached results</span>
-          </label>
-          
+          <div class="flex items-center space-x-4">
+            <label class="flex items-center">
+              <input v-model="useCache" type="checkbox" class="mr-2" />
+              <span class="text-sm text-gray-600">Use cached results</span>
+            </label>
+
+            <label class="flex items-center">
+              <input v-model="useWebSocket" type="checkbox" class="mr-2" />
+              <span class="text-sm text-gray-600">Use WebSocket (real-time updates)</span>
+            </label>
+          </div>
+
           <button
             type="submit"
             :disabled="isLoading || query.length < 5"
@@ -32,9 +39,20 @@
       </form>
     </div>
 
+    <!-- Connection Status -->
+    <div v-if="connectionStatus" class="bg-blue-50 rounded-lg p-3 mb-6">
+      <p class="text-sm text-blue-700">{{ connectionStatus }}</p>
+    </div>
+
     <!-- Loading Status -->
     <div v-if="isLoading" class="bg-blue-50 rounded-lg p-4 mb-6">
-      <p class="text-blue-700">🔄 Research in progress... This may take 30-40 seconds.</p>
+      <p class="text-blue-700">🔄 Research in progress... {{ currentStep }}</p>
+      <div v-if="progress > 0" class="mt-2">
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+               :style="`width: ${progress}%`"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Error Display -->
@@ -74,13 +92,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { marked } from 'marked'
 
 // Form data
 const query = ref('')
 const useCache = ref(true)
+const useWebSocket = ref(false)  // Toggle for WebSocket
 
 // State
 const isLoading = ref(false)
@@ -88,9 +107,16 @@ const error = ref<string | null>(null)
 const report = ref<string | null>(null)
 const metadata = ref<any>(null)
 const cached = ref(false)
+const connectionStatus = ref('')
+const currentStep = ref('')
+const progress = ref(0)
+
+// WebSocket
+let ws: WebSocket | null = null
 
 // API configuration
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws'
 
 // Computed
 const renderedReport = computed(() => {
@@ -101,19 +127,93 @@ const renderedReport = computed(() => {
 // Methods
 async function startResearch() {
   if (query.value.length < 5) return
-  
+
   isLoading.value = true
   error.value = null
   report.value = null
   metadata.value = null
-  
+  connectionStatus.value = ''
+  currentStep.value = ''
+  progress.value = 0
+
+  try {
+    if (useWebSocket.value) {
+      await researchViaWebSocket()
+    } else {
+      await researchViaAPI()
+    }
+  } catch (err: any) {
+    console.error('Research error:', err)
+    error.value = err.message || 'An error occurred'
+    isLoading.value = false
+  }
+}
+
+function researchViaWebSocket() {
+  return new Promise((resolve, reject) => {
+    connectionStatus.value = '🔄 Connecting to WebSocket...'
+
+    ws = new WebSocket(wsUrl)
+
+    ws.onopen = () => {
+      connectionStatus.value = '✅ WebSocket connected'
+      console.log('WebSocket connected')
+
+      // Send the query
+      ws?.send(JSON.stringify({ query: query.value }))
+      console.log('Query sent via WebSocket')
+    }
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      console.log('WebSocket message:', data)
+
+      if (data.type === 'status') {
+        currentStep.value = data.message
+      } else if (data.type === 'progress') {
+        currentStep.value = data.message
+        progress.value = data.progress || 0
+      } else if (data.type === 'complete') {
+        report.value = data.report
+        metadata.value = data.metadata
+        cached.value = data.cached
+        isLoading.value = false
+        connectionStatus.value = ''
+        ws?.close()
+        resolve(true)
+      } else if (data.type === 'error') {
+        error.value = data.error
+        isLoading.value = false
+        ws?.close()
+        reject(new Error(data.error))
+      }
+    }
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err)
+      connectionStatus.value = '❌ WebSocket error'
+      error.value = 'WebSocket connection failed'
+      isLoading.value = false
+      reject(err)
+    }
+
+    ws.onclose = () => {
+      console.log('WebSocket closed')
+      connectionStatus.value = ''
+    }
+  })
+}
+
+async function researchViaAPI() {
+  currentStep.value = 'Processing research request...'
+
   try {
     const response = await axios.post(`${apiBaseUrl}/api/research`, {
       query: query.value,
       use_cache: useCache.value,
       report_type: 'summary'
     })
-    
+
     if (response.data.success) {
       report.value = response.data.report
       metadata.value = response.data.metadata
@@ -135,6 +235,13 @@ function copyReport() {
     alert('Report copied to clipboard!')
   }
 }
+
+// Cleanup
+onUnmounted(() => {
+  if (ws) {
+    ws.close()
+  }
+})
 </script>
 
 <style scoped>
